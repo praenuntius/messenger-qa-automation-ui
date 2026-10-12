@@ -1,0 +1,48 @@
+FROM jenkins/jenkins:lts
+
+USER root
+
+RUN echo "deb http://deb.debian.org/debian trixie-backports main" > /etc/apt/sources.list.d/backports.list \
+    && apt-get update
+
+RUN apt-get update && apt-get install -y \
+    openjdk-21-jdk \
+    maven \
+    git \
+    curl \
+    unzip \
+    wget \
+    iputils-ping \
+    dnsutils \
+    lsof \
+    docker.io \
+    jq \
+    xvfb \
+    locales \
+    libfuse2 \
+    libgtk-3-0 \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    libgbm1 \
+    libx11-xcb1 \
+&& echo "ru_RU.UTF-8 UTF-8" >> /etc/locale.gen \
+&& locale-gen ru_RU.UTF-8 \
+&& rm -rf /var/lib/apt/lists/*
+
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH=$JAVA_HOME/bin:/usr/local/bin:/usr/bin:$PATH
+
+RUN wget https://github.com/allure-framework/allurectl/releases/download/2.17.0/allurectl_linux_amd64 -O /usr/local/bin/allurectl \
+    && chmod +x /usr/local/bin/allurectl
+
+RUN mkdir -p /var/jenkins_home/plugins \
+    && curl -sSL https://updates.jenkins.io/download/plugins/git/latest/git.hpi -o /var/jenkins_home/plugins/git.hpi \
+    && curl -sSL https://updates.jenkins.io/download/plugins/git-client/latest/git-client.hpi -o /var/jenkins_home/plugins/git-client.hpi \
+    && curl -sSL https://updates.jenkins.io/download/plugins/workflow-aggregator/latest/workflow-aggregator.hpi -o /var/jenkins_home/plugins/workflow-aggregator.hpi \
+    && curl -sSL https://updates.jenkins.io/download/plugins/allure-jenkins-plugin/latest/allure-jenkins-plugin.hpi -o /var/jenkins_home/plugins/allure-jenkins-plugin.hpi \
+    && chown -R jenkins:jenkins /var/jenkins_home \
+    && chmod -R 755 /var/jenkins_home
+
+USER jenkins
+ENTRYPOINT ["/usr/local/bin/jenkins.sh"]

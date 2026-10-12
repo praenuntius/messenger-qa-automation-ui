@@ -1,0 +1,21 @@
+{
+  "builder": {
+    "gc": {
+      "defaultKeepStorage": "20GB",
+      "enabled": true
+    }
+  },
+  "dns": [
+    "8.8.8.8",
+    "8.8.4.4"
+  ],
+  "experimental": false,
+  "proxies": {
+    "default": {
+      "noProxy": "localhost,127.0.0.1,.domain.net, web-preprod.domain.net,selenoid,jenkins"
+    }
+  },
+  "regisrty-mirrors": [
+    "https://mirror.gcr.io"
+  ]
+}

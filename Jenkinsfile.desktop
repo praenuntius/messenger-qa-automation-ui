@@ -1,0 +1,341 @@
+/**
+ * Desktop UI tests (web-tests + run.channel=desktop).
+ *
+ * Агент выбирается по PLATFORM:
+ *   linux   → label linux-desktop  (Linux ВМ, shared с web-инфраструктурой)
+ *   mac     → label mac-mobile     (Mac ВМ, опционально)
+ *   windows → label windows-desktop (будущая Windows ВМ)
+ */
+pipeline {
+    agent none
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    parameters {
+        string(
+                name: 'BRANCH_NAME',
+                defaultValue: 'main',
+                description: 'Git branch to checkout'
+        )
+        choice(
+                name: 'PROFILE',
+                choices: [
+                        'desktop-web-linux-ci',
+                        'desktop-web-mac-ci',
+                        'desktop-playwright-linux-ci'
+                ],
+                description: 'Профиль из config/run-profiles/'
+        )
+        choice(
+                name: 'MODE',
+                choices: ['BASE', 'FULL'],
+                description: 'BASE: essential checks only | FULL: with env diagnostics'
+        )
+        choice(
+                name: 'PLATFORM',
+                choices: ['linux', 'mac', 'windows'],
+                description: 'Платформа desktop-клиента; определяет Jenkins agent label'
+        )
+        string(
+                name: 'APP_VERSION',
+                defaultValue: 'latest',
+                description: 'Перекрывает desktop.app.version в профиле'
+        )
+        choice(
+                name: 'THREAD_COUNT',
+                choices: ['1', '2', '3', '4'],
+                description: 'Параллельные потоки (на shared Linux ВМ рекомендуется 1)'
+        )
+        booleanParam(
+                name: 'SKIP_CLEANUP',
+                defaultValue: false,
+                description: 'Skip cleanup for debugging'
+        )
+    }
+
+    environment {
+        JAVA_TOOL_OPTIONS = '-Dfile.encoding=UTF-8'
+        MAVEN_OPTS        = '-Xmx2g -Dfile.encoding=UTF-8'
+    }
+
+    stages {
+        stage('Resolve agent') {
+            agent any
+            steps {
+                checkout scm
+                script {
+                    def rp = load 'jenkins/runProfile.groovy'
+                    def pipelinesCi = rp.loadPipelinesCi()
+                    rp.validateDesktopProfilePlatform(params.PROFILE, params.PLATFORM)
+                    env.DESKTOP_AGENT_LABEL = rp.desktopAgentLabel(params.PLATFORM, pipelinesCi)
+                    echo "Desktop build #${env.BUILD_NUMBER} — platform: ${params.PLATFORM}, " +
+                            "profile: ${params.PROFILE}, agent label: ${env.DESKTOP_AGENT_LABEL}"
+                }
+            }
+        }
+
+        stage('Desktop run') {
+            agent { label "${env.DESKTOP_AGENT_LABEL}" }
+            stages {
+                stage('Initialize') {
+                    steps {
+                        script {
+                            cleanWs()
+                            checkoutProject()
+                            loadCiConfig()
+                        }
+                    }
+                }
+
+                stage('Environment Check') {
+                    when { expression { params.MODE == 'FULL' } }
+                    steps { script { checkEnvironment() } }
+                }
+
+                stage('Prepare Xvfb') {
+                    when { expression { params.PLATFORM == 'linux' } }
+                    steps {
+                        script {
+                            startXvfb()
+                            prepareLinuxLocale()
+                        }
+                    }
+                }
+
+                stage('Build') {
+                    steps {
+                        script {
+                            // install deps в local .m2 без тестов; сами тесты — только в TEST_MODULE
+                            sh "mvn ${env.MAVEN_MODULE_ARGS} clean install -DskipTests -B -q"
+                        }
+                    }
+                }
+
+                stage('Configure Allure') {
+                    steps {
+                        script {
+                            withCredentials([string(credentialsId: 'allure-api-key', variable: 'ALLURE_TOKEN')]) {
+                                configureAllure(env.ALLURE_TOKEN)
+                            }
+                        }
+                    }
+                }
+
+                stage('Run Desktop Tests') {
+                    steps {
+                        script {
+                            withCredentials([string(credentialsId: 'allure-api-key', variable: 'ALLURE_TOKEN')]) {
+                                runDesktopTests(env.ALLURE_TOKEN)
+                            }
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    script {
+                        if (!params.SKIP_CLEANUP) {
+                            cleanupDesktopEnvironment()
+                        }
+
+                        archiveArtifacts artifacts: "logs/**/*.log, ${env.TEST_MODULE}/target/surefire-reports/**/*, ${env.ALLURE_RESULTS_DIR}/**/*",
+                                allowEmptyArchive: true
+
+                        junit testResults: "${env.TEST_MODULE}/target/surefire-reports/*.xml",
+                                allowEmptyResults: true
+                    }
+                }
+                failure {
+                    echo "Desktop pipeline failed. Check archived artifacts."
+                }
+            }
+        }
+    }
+}
+
+// ============= Helper Methods =============
+
+def loadCiConfig() {
+    def rp = load 'jenkins/runProfile.groovy'
+    def pipelinesCi = rp.loadPipelinesCi()
+    def allureCi = rp.loadAllureCi()
+
+    def ctx = rp.fromProfile(params.PROFILE, [
+            'desktop.platform'   : params.PLATFORM,
+            'desktop.app.version': params.APP_VERSION,
+            'thread-count'       : params.THREAD_COUNT,
+    ])
+
+    env.TEST_MODULE = ctx.module
+    env.MAVEN_MODULE_ARGS = ctx.mavenModuleArgs
+    env.MAVEN_PROFILE_FLAGS = ctx.mavenFlags
+    env.RUN_CHANNEL = ctx.props.get('run.channel', '')
+    env.ALLURE_RESULTS_DIR = "${ctx.module}/target/allure-results"
+    env.ALLURE_ENDPOINT = allureCi['allure.endpoint']
+
+    def allureKey = (params.PROFILE == pipelinesCi['pipeline.desktop.playwright.profile'])
+            ? 'desktop-playwright'
+            : 'desktop-web'
+    env.ALLURE_PROJECT_ID = rp.allureProjectId(allureCi, allureKey)
+
+    def launchTemplate = rp.allureLaunchTemplate(allureCi, allureKey)
+    env.ALLURE_LAUNCH_NAME = rp.resolveLaunchName(launchTemplate, [
+            'PLATFORM'   : params.PLATFORM,
+            'APP_VERSION': params.APP_VERSION,
+            'BRANCH_NAME': params.BRANCH_NAME,
+    ])
+
+    echo "Run profile: ${ctx.id} — ${ctx.description}"
+    echo "Module: ${ctx.module}, run.channel=${env.RUN_CHANNEL ?: 'n/a (playwright)'}"
+    echo "Maven flags: ${ctx.mavenFlags}"
+    echo "Allure project: ${allureKey} (#${env.ALLURE_PROJECT_ID}), launch: ${env.ALLURE_LAUNCH_NAME}"
+}
+
+def checkoutProject() {
+    checkout([
+            $class           : 'GitSCM',
+            branches         : [[name: "*/${params.BRANCH_NAME}"]],
+            userRemoteConfigs: scm.userRemoteConfigs,
+            extensions       : [[$class: 'CleanBeforeCheckout']]
+    ])
+}
+
+def checkEnvironment() {
+    sh """
+        mkdir -p logs
+        {
+            echo "=== Desktop Environment Check ==="
+            hostname && whoami
+            java -version  || true
+            mvn -version   || true
+            allurectl --version || true
+            which Xvfb     || true
+            echo "DISPLAY=\${DISPLAY}"
+            echo "PLATFORM=${params.PLATFORM}"
+            echo "--- locale ---"
+            locale 2>/dev/null || true
+            locale -a 2>/dev/null | grep -i '^ru' || echo "(no ru_* locales)"
+        } > logs/environment.log 2>&1
+    """
+}
+
+def startXvfb() {
+    sh '''
+        mkdir -p logs
+        if ! command -v Xvfb >/dev/null 2>&1; then
+            echo "ERROR: Xvfb not found in PATH. Install package xvfb into Jenkins image/agent." | tee logs/xvfb.log
+            exit 1
+        fi
+        if pgrep -f "Xvfb :99" >/dev/null 2>&1; then
+            echo "Xvfb :99 already running" | tee -a logs/xvfb.log
+        else
+            nohup Xvfb :99 -screen 0 1920x1080x24 >> logs/xvfb.log 2>&1 &
+            sleep 2
+            if ! pgrep -f "Xvfb :99" >/dev/null 2>&1; then
+                echo "ERROR: Xvfb failed to start. See logs/xvfb.log" | tee -a logs/xvfb.log
+                exit 1
+            fi
+            echo "Xvfb started" | tee -a logs/xvfb.log
+        fi
+    '''
+    env.DISPLAY = ':99'
+}
+
+def prepareLinuxLocale() {
+    sh '''
+        mkdir -p logs
+        {
+            echo "=== Linux locale (ru_RU.UTF-8) ==="
+            locale 2>/dev/null || true
+            echo "--- locale -a (ru) ---"
+            locale -a 2>/dev/null | grep -i '^ru' || echo "(no ru_* locales yet)"
+            if locale -a 2>/dev/null | grep -qiE '^ru_RU(\\.(utf8|UTF-8))?$'; then
+                echo "ru_RU already generated"
+            else
+                echo "Generating ru_RU.UTF-8"
+                if command -v locale-gen >/dev/null 2>&1; then
+                    sudo locale-gen ru_RU.UTF-8 || locale-gen ru_RU.UTF-8 || true
+                elif command -v localedef >/dev/null 2>&1; then
+                    sudo localedef -i ru_RU -f UTF-8 ru_RU.UTF-8 || \
+                        localedef -i ru_RU -f UTF-8 ru_RU.UTF-8 || true
+                else
+                    echo "WARNING: locale-gen/localedef not found"
+                fi
+                locale -a 2>/dev/null | grep -i '^ru' || \
+                    echo "WARNING: ru_RU still missing; Electron will use --lang=ru"
+            fi
+        } | tee logs/locale.log
+    '''
+}
+
+def configureAllure(token) {
+    sh """
+        mkdir -p ~/.allure logs
+
+cat > ~/.allure/config.yaml <<EOF
+project_id: ${ALLURE_PROJECT_ID}
+endpoint: ${ALLURE_ENDPOINT}
+token: ${token}
+EOF
+
+        if ! curl -sf ${ALLURE_ENDPOINT} > /dev/null; then
+            echo "WARNING: Cannot reach Allure TestOps" > logs/allure-config.log
+        else
+            echo "Allure configured" > logs/allure-config.log
+        fi
+    """
+}
+
+def runDesktopTests(token) {
+    // Только целевой модуль профиля. Не использовать -am test: иначе Maven гоняет
+    // surefire и в desktop-tests (Playwright), а web-tests даже не доходит.
+    def mvnBase = "-pl ${env.TEST_MODULE} test ${env.MAVEN_PROFILE_FLAGS} " +
+            '-Dsurefire.rerunFailingTestsCount=0 -B'
+    def allureResultsPath = "${env.WORKSPACE}/${env.ALLURE_RESULTS_DIR}"
+    def launchNameEscaped = env.ALLURE_LAUNCH_NAME.replace("'", "'\"'\"'")
+
+    sh """
+        mkdir -p logs
+        rm -rf '${env.ALLURE_RESULTS_DIR}'
+        mkdir -p '${env.ALLURE_RESULTS_DIR}'
+
+        export ALLURE_TOKEN='${token}'
+        export ALLURE_LAUNCH_NAME='${launchNameEscaped}'
+        export DISPLAY='${env.DISPLAY ?: ':99'}'
+        export APPIMAGE_EXTRACT_AND_RUN=1
+
+        allurectl watch \\
+            --endpoint='${env.ALLURE_ENDPOINT}' \\
+            --results='${allureResultsPath}' \\
+            -- mvn ${mvnBase} \\
+                -Dallure.results.directory='${allureResultsPath}' \\
+            > logs/desktop-test-run.log 2>&1
+    """
+}
+
+def cleanupDesktopEnvironment() {
+    if (params.PLATFORM == 'linux') {
+        sh '''
+            mkdir -p logs
+            {
+                echo "=== Desktop cleanup (Linux) ==="
+                pkill -f "tdm.*AppImage" || true
+                pkill -f "electron"      || true
+                pkill -f "Xvfb :99"     || true
+            } > logs/desktop-cleanup.log 2>&1
+        '''
+    } else if (params.PLATFORM == 'mac') {
+        sh '''
+            mkdir -p logs
+            {
+                echo "=== Desktop cleanup (Mac) ==="
+                pkill -f "Electron" || true
+                pkill -f "TDM" || true
+            } > logs/desktop-cleanup.log 2>&1
+        '''
+    }
+}

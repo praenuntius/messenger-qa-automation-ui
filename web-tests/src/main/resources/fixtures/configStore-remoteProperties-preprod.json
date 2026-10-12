@@ -1,0 +1,210 @@
+{
+  "AUTODELETE_MESSAGES_ENABLED": {
+    "key": "AUTODELETE_MESSAGES_ENABLED",
+    "booleanValue": true
+  },
+  "ADVANCED_THEMES_ENABLED": {
+    "key": "ADVANCED_THEMES_ENABLED",
+    "booleanValue": true
+  },
+  "ALLOW_CACHE_SIZE": {
+    "key": "ALLOW_CACHE_SIZE",
+    "booleanValue": true
+  },
+  "ALLOW_DELETE_MULTIPLE_WORKSPACES": {
+    "key": "ALLOW_DELETE_MULTIPLE_WORKSPACES",
+    "booleanValue": true
+  },
+  "ALLOW_DELETE_WORKSPACE": {
+    "key": "ALLOW_DELETE_WORKSPACE",
+    "booleanValue": true
+  },
+  "ALLOW_HISTORY_CLEAR": {
+    "key": "ALLOW_HISTORY_CLEAR",
+    "booleanValue": true
+  },
+  "ALLOW_TFA_DISABLE": {
+    "key": "ALLOW_TFA_DISABLE",
+    "booleanValue": false
+  },
+  "AUTO_DELETION_ENABLED": {
+    "key": "AUTO_DELETION_ENABLED",
+    "booleanValue": true
+  },
+  "AVATAR_EDITOR_ENABLED": {
+    "key": "AVATAR_EDITOR_ENABLED",
+    "booleanValue": true
+  },
+  "BOARD_VIEW": {
+    "key": "BOARD_VIEW",
+    "booleanValue": true
+  },
+  "CHANNEL_REACTIONS_ENABLED": {
+    "key": "CHANNEL_REACTIONS_ENABLED",
+    "booleanValue": true
+  },
+  "CHAT_HISTORY_EXPORT_ENABLED": {
+    "key": "CHAT_HISTORY_EXPORT_ENABLED",
+    "booleanValue": true
+  },
+  "EDITING_HISTORY": {
+    "key": "EDITING_HISTORY",
+    "booleanValue": true
+  },
+  "ENABLE_GLOBAL_SEARCH_ALL_RESULTS": {
+    "key": "ENABLE_GLOBAL_SEARCH_ALL_RESULTS",
+    "booleanValue": true
+  },
+  "ENABLE_IMAR_SEARCH": {
+    "key": "ENABLE_IMAR_SEARCH",
+    "booleanValue": true
+  },
+  "FAST_ACTIONS_ENABLED": {
+    "key": "FAST_ACTIONS_ENABLED",
+    "booleanValue": true
+  },
+  "FILE_COMPRESSION_ENABLED": {
+    "key": "FILE_COMPRESSION_ENABLED",
+    "booleanValue": true
+  },
+  "FILE_SIZE_LIMIT_MB": {
+    "key": "FILE_SIZE_LIMIT_MB",
+    "intValue": 450
+  },
+  "FORBIDDEN_EXTENSIONS": {
+    "key": "FORBIDDEN_EXTENSIONS",
+    "stringValue": "exe"
+  },
+  "FORCE_ENABLE_MULTISIDEBAR": {
+    "key": "FORCE_ENABLE_MULTISIDEBAR",
+    "booleanValue": true
+  },
+  "GIFS_RU_API_CLIENT_ID": {
+    "key": "GIFS_RU_API_CLIENT_ID",
+    "stringValue": "4729ed1c-699e-4ea1-b2ec-27bcbb43b955"
+  },
+  "GROUP_COMMENTS_ENABLED": {
+    "key": "GROUP_COMMENTS_ENABLED",
+    "booleanValue": true
+  },
+  "GROUP_MENTION_ENABLED": {
+    "key": "GROUP_MENTION_ENABLED",
+    "booleanValue": true
+  },
+  "LOGIN_WITHOUT_LOGOUT_WORKSPACES": {
+    "key": "LOGIN_WITHOUT_LOGOUT_WORKSPACES",
+    "booleanValue": true
+  },
+  "MAX_VOICE_CALL_PARTICIPANTS": {
+    "key": "MAX_VOICE_CALL_PARTICIPANTS",
+    "intValue": 30
+  },
+  "MESSAGE_GIF_ENABLED": {
+    "key": "MESSAGE_GIF_ENABLED",
+    "booleanValue": true
+  },
+  "MESSAGE_SEEN_ENABLED": {
+    "key": "MESSAGE_SEEN_ENABLED",
+    "booleanValue": true
+  },
+  "MESSAGE_SPOILERS_ENABLED": {
+    "key": "MESSAGE_SPOILERS_ENABLED",
+    "booleanValue": true
+  },
+  "MESSAGE_STICKER_ENABLED": {
+    "key": "MESSAGE_STICKER_ENABLED",
+    "booleanValue": true
+  },
+  "MESSAGE_TAGS": {
+    "key": "MESSAGE_TAGS",
+    "booleanValue": true
+  },
+  "NOT_ANONYMOUS_POLL_AVAILABLE": {
+    "key": "NOT_ANONYMOUS_POLL_AVAILABLE",
+    "booleanValue": true
+  },
+  "OTHER_MESSAGE_SEEN_ENABLED": {
+    "key": "OTHER_MESSAGE_SEEN_ENABLED",
+    "booleanValue": true
+  },
+  "PEOPLE_SEARCH_CALL_ENABLED": {
+    "key": "PEOPLE_SEARCH_CALL_ENABLED",
+    "booleanValue": true
+  },
+  "POLL_AVAILABLE": {
+    "key": "POLL_AVAILABLE",
+    "booleanValue": true
+  },
+  "SCHEDULED_MESSAGES_ENABLED": {
+    "key": "SCHEDULED_MESSAGES_ENABLED",
+    "booleanValue": true
+  },
+  "SERVER_VERSION": {
+    "key": "SERVER_VERSION",
+    "stringValue": "3.1.1"
+  },
+  "SHOW_INCOMING_CALL_WINDOW": {
+    "key": "SHOW_INCOMING_CALL_WINDOW",
+    "booleanValue": true
+  },
+  "SIP_ENABLED": {
+    "key": "SIP_ENABLED",
+    "booleanValue": true
+  },
+  "SMART_NOTIFICATIONS_ENABLED": {
+    "key": "SMART_NOTIFICATIONS_ENABLED",
+    "booleanValue": true
+  },
+  "STICKER_BOT_ID": {
+    "key": "STICKER_BOT_ID",
+    "stringValue": "-308557834011547"
+  },
+  "TRANSCRIPTION_ENABLED": {
+    "key": "TRANSCRIPTION_ENABLED",
+    "booleanValue": true
+  },
+  "UNREAD_CHAT_ENABLED": {
+    "key": "UNREAD_CHAT_ENABLED",
+    "booleanValue": true
+  },
+  "VCS_AI_RECAP_ENABLED": {
+    "key": "VCS_AI_RECAP_ENABLED",
+    "booleanValue": true
+  },
+  "VCS_MODERATORS_ENABLED": {
+    "key": "VCS_MODERATORS_ENABLED",
+    "booleanValue": true
+  },
+  "VCS_P2P_CALL_TYPE": {
+    "key": "VCS_P2P_CALL_TYPE",
+    "stringValue": "VIDEO"
+  },
+  "VCS_REACTIONS_ENABLED": {
+    "key": "VCS_REACTIONS_ENABLED",
+    "booleanValue": false
+  },
+  "VCS_SHOW_CALL_HISTORY": {
+    "key": "VCS_SHOW_CALL_HISTORY",
+    "booleanValue": true
+  },
+  "VIDEO_COMPRESSION_ENABLED": {
+    "key": "VIDEO_COMPRESSION_ENABLED",
+    "booleanValue": true
+  },
+  "VIDEO_ENCRYPTION_ENABLED": {
+    "key": "VIDEO_ENCRYPTION_ENABLED",
+    "booleanValue": true
+  },
+  "VOICE_MESSAGES_ENABLED": {
+    "key": "VOICE_MESSAGES_ENABLED",
+    "booleanValue": true
+  },
+  "WALLPAPER_CUSTOMIZATION_ENABLED": {
+    "key": "WALLPAPER_CUSTOMIZATION_ENABLED",
+    "booleanValue": true
+  },
+  "WORKSPACE_USER_DELETE_ENABLED": {
+    "key": "WORKSPACE_USER_DELETE_ENABLED",
+    "booleanValue": true
+  }
+}

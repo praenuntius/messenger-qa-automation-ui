@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.foxtrot</groupId>
+    <artifactId>qa-automation-ui</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <description>
+        Parent project for automated UI testing.
+        Contains shared qa-core module, web-tests module and mobile-tests module.
+    </description>
+
+    <modules>
+        <module>qa-core</module>
+        <module>web-tests</module>
+        <module>mobile-tests</module>
+        <module>desktop-tests</module>
+    </modules>
+
+    <properties>
+        <!-- Java Version -->
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Testing Frameworks -->
+        <junit.jupiter.version>5.10.0</junit.jupiter.version>
+        <junit.platform.version>1.10.0</junit.platform.version>
+        <selenide.version>7.7.0</selenide.version>
+        <appium.java.client.version>10.0.0</appium.java.client.version>
+        <rest-assured.version>5.5.0</rest-assured.version>
+
+        <!-- Reporting -->
+        <allure.version>2.29.0</allure.version>
+        <aspectj.version>1.9.22</aspectj.version>
+
+        <!-- Logging -->
+        <logback.version>1.5.13</logback.version>
+
+        <!-- Utilities -->
+        <awaitility.version>4.2.0</awaitility.version>
+        <owner.version>1.0.12</owner.version>
+        <commons-io.version>2.15.0</commons-io.version>
+        <jackson.version>2.18.1</jackson.version>
+        <lombok.version>1.18.42</lombok.version>
+        <hamcrest.version>3.0</hamcrest.version>
+        <jetbrains.annotations.version>15.0</jetbrains.annotations.version>
+        <faker.version>2.5.4</faker.version>
+        <bouncycastle.version>1.78.1</bouncycastle.version>
+        <jakarta.mail.version>2.0.1</jakarta.mail.version>
+        <playwright.version>1.50.0</playwright.version>
+
+        <!-- Plugin Versions -->
+        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.5.0</maven-surefire-plugin.version>
+        <allure-maven-plugin.version>2.15.2</allure-maven-plugin.version>
+
+        <!-- Environment URLs (override via -Pstage14 or -D) -->
+        <baseApiUrl>https://api-preprod.domain.net</baseApiUrl>
+        <pusherBaseUrl>https://pusher-preprod.domain.net</pusherBaseUrl>
+        <baseUrl>https://web-preprod.domain.net</baseUrl>
+        <backofficeApiUrl>https://backoffice-preprod.domain.net</backofficeApiUrl>
+        <backofficeOrganizationId>128644</backofficeOrganizationId>
+        <fileuploadBaseUrl>https://fileupload-preprod.domain.net</fileuploadBaseUrl>
+
+        <!-- Encryption / mobile CI defaults (override in -Pstage14) -->
+        <encryption.key.ttl.minutes>1</encryption.key.ttl.minutes>
+        <android.apk.file.name>tango_preprod.apk</android.apk.file.name>
+        <android.app.package>com.tdm.messenger.preprod</android.app.package>
+
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Управление версиями Jackson -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Internal modules -->
+            <dependency>
+                <groupId>org.foxtrot</groupId>
+                <artifactId>qa-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.foxtrot</groupId>
+                <artifactId>desktop-tests</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Owner -->
+            <dependency>
+                <groupId>org.aeonbits.owner</groupId>
+                <artifactId>owner-java8</artifactId>
+                <version>${owner.version}</version>
+            </dependency>
+
+            <!-- Selenide -->
+            <dependency>
+                <groupId>com.codeborne</groupId>
+                <artifactId>selenide</artifactId>
+                <version>${selenide.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.codeborne</groupId>
+                <artifactId>selenide-appium</artifactId>
+                <version>${selenide.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.codeborne</groupId>
+                <artifactId>selenide-selenoid</artifactId>
+                <version>${selenide.version}</version>
+            </dependency>
+
+            <!-- API Testing -->
+            <dependency>
+                <groupId>io.rest-assured</groupId>
+                <artifactId>rest-assured</artifactId>
+                <version>${rest-assured.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>com.fasterxml.jackson.core</groupId>
+                        <artifactId>jackson-databind</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.fasterxml.jackson.core</groupId>
+                        <artifactId>jackson-core</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.fasterxml.jackson.core</groupId>
+                        <artifactId>jackson-annotations</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
+            <!-- Test Framework -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit.jupiter.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-api</artifactId>
+                <version>${junit.jupiter.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-suite-api</artifactId>
+                <version>${junit.platform.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-suite-engine</artifactId>
+                <version>${junit.platform.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-suite-commons</artifactId>
+                <version>${junit.platform.version}</version>
+            </dependency>
+
+            <!-- Allure Reporting-->
+            <dependency>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-junit5</artifactId>
+                <version>${allure.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-selenide</artifactId>
+                <version>${allure.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-java-commons</artifactId>
+                <version>${allure.version}</version>
+            </dependency>
+
+            <!-- Logging - Logback уже включает slf4j-api -->
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+
+            <!-- Utilities -->
+            <dependency>
+                <groupId>org.awaitility</groupId>
+                <artifactId>awaitility</artifactId>
+                <version>${awaitility.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>${commons-io.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+                <version>${lombok.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.hamcrest</groupId>
+                <artifactId>hamcrest</artifactId>
+                <version>${hamcrest.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.jetbrains</groupId>
+                <artifactId>annotations</artifactId>
+                <version>${jetbrains.annotations.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>net.datafaker</groupId>
+                <artifactId>datafaker</artifactId>
+                <version>${faker.version}</version>
+            </dependency>
+
+            <!-- Playwright -->
+            <dependency>
+                <groupId>com.microsoft.playwright</groupId>
+                <artifactId>playwright</artifactId>
+                <version>${playwright.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.sun.mail</groupId>
+                <artifactId>jakarta.mail</artifactId>
+                <version>${jakarta.mail.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Compiler Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven-compiler-plugin.version}</version>
+                    <configuration>
+                        <source>${maven.compiler.source}</source>
+                        <target>${maven.compiler.target}</target>
+                        <encoding>${project.build.sourceEncoding}</encoding>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+
+                <!-- Surefire Plugin for Test Execution -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <forkCount>1</forkCount>
+                        <reuseForks>true</reuseForks>
+                        <parallel>none</parallel>
+                        <useUnlimitedThreads>false</useUnlimitedThreads>
+
+                        <argLine>
+                            -javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar"
+                        </argLine>
+
+                        <systemPropertyVariables>
+                            <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                        </systemPropertyVariables>
+
+                        <includes>
+                            <include>**/*Test.java</include>
+                            <include>**/*Tests.java</include>
+                            <include>**/*Spec.java</include>
+                            <include>**/TestSuite.java</include>
+                        </includes>
+                    </configuration>
+
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.aspectj</groupId>
+                            <artifactId>aspectjweaver</artifactId>
+                            <version>${aspectj.version}</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+
+                <!-- Allure Reporting Plugin -->
+                <plugin>
+                    <groupId>io.qameta.allure</groupId>
+                    <artifactId>allure-maven</artifactId>
+                    <version>${allure-maven-plugin.version}</version>
+                    <configuration>
+                        <reportVersion>${allure.version}</reportVersion>
+                        <resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>stage14</id>
+            <properties>
+                <baseApiUrl>https://api-stage14.domain.net</baseApiUrl>
+                <pusherBaseUrl>https://pusher-stage14.domain.net</pusherBaseUrl>
+                <baseUrl>https://web-stage14.domain.net</baseUrl>
+                <backofficeApiUrl>https://backoffice-stage14.domain.net</backofficeApiUrl>
+                <backofficeOrganizationId>1007501</backofficeOrganizationId>
+                <fileuploadBaseUrl>https://fileupload-stage14.domain.net</fileuploadBaseUrl>
+                <encryption.key.ttl.minutes>1</encryption.key.ttl.minutes>
+                <android.apk.file.name>foxtrot_dev.apk</android.apk.file.name>
+                <!-- Linux Jenkins + Selenoid. Иначе web-tests/pom default=desktop → hdiutil. -->
+                <run.channel>web</run.channel>
+            </properties>
+        </profile>
+    </profiles>
+</project>

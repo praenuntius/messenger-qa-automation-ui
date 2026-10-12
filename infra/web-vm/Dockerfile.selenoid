@@ -1,0 +1,14 @@
+FROM aerokube/selenoid:latest-release
+
+USER root
+
+RUN apk add --no-cache curl jq
+
+RUN sed -i 's/x11vnc -display :\$DISPLAY -auth guess -forever -loop -noxdamage -repeat -rfbauth -rfbport 5900 -shared/x11vnc -display :\$DISPLAY -auth guess -forever -wait 0 -noxdamage -nowin -repeat -rfbauth -rfbport 5900 
+-shared -nopw -quiet/g' /entrypoint.sh
+
+COPY browsers.json /etc/selenoid/browsers.json
+
+USER selenoid
+
+CMD ["/usr/bin/selenoid", "-conf", "/etc/selenoid/browsers.json", "-video-output-dir", "/opt/selenoid/video", "--log-output-dir", "/etc/selenoid/logs", "--service-startup-timeout", "300s", "--session-attempt-timeout", "300s", "--timeout", "10m", "--limit", "4"]

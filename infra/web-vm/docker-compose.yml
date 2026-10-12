@@ -1,0 +1,142 @@
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
+    container_name: jenkins
+    restart: unless-stopped
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - jenkins_plugins:/var/jenkins_home/plugins
+    extra_hosts:
+      - "gitfr.domain.net:172.20.0.94"
+      - "testops.domain.net:172.20.0.220"
+      - "web-preprod.domain.net:10.28.34.200"
+      - "api-preprod.domain.net:10.28.34.200"
+      - "pusher-preprod.domain.net:10.28.34.200"
+      - "fileupload-preprod.domain.net:10.28.34.200"
+      - "s3-preprod.domain.net:10.28.34.200"
+      - "api-backoffice-preprod.domain.net:10.28.34.200"
+      - "web-stage14.domain.net:10.205.98.230"
+      - "api-stage14.domain.net:10.205.98.230"
+      - "pusher-stage14.domain.net:10.205.98.230"
+      - "fileupload-stage14.domain.net:10.205.98.230"
+      - "s3-stage14.domain.net:10.205.98.230"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    dns_search:
+      - domain.net
+    networks:
+      - qa-net
+
+  selenoid:
+    build:
+      context: .
+      dockerfile: Dockerfile.selenoid
+    container_name: selenoid
+    user: root
+    restart: unless-stopped
+    runtime: runc
+    ports:
+      - "4444:4444"
+      - "5900:5900"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./browsers.json:/etc/selenoid/browsers.json
+      - ./selenoid_logs:/etc/selenoid/logs
+      - ./selenoid/video:/opt/selenoid/video
+      - ./selenoid/chrome_logs:/tmp/chrome_logs
+    environment:
+      - OVERRIDE_VIDEO_OUTPUT_DIR=/root/qa-automation-ui/selenoid/video
+    extra_hosts:
+      - "gitfr.domain.net:172.20.0.94"
+      - "testops.domain.net:172.20.0.220"
+      - "web-preprod.domain.net:10.28.34.200"
+      - "api-preprod.domain.net:10.28.34.200"
+      - "pusher-preprod.domain.net:10.28.34.200"
+      - "fileupload-preprod.domain.net:10.28.34.200"
+      - "s3-preprod.domain.net:10.28.34.200"
+      - "web-stage14.domain.net:10.205.98.230"
+      - "api-stage14.domain.net:10.205.98.230"
+      - "pusher-stage14.domain.net:10.205.98.230"
+      - "fileupload-stage14.domain.net:10.205.98.230"
+      - "s3-stage14.domain.net:10.205.98.230"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    dns_search:
+      - domain.net
+    shm_size: 2g
+    mem_limit: 4g
+    command:
+      - "-conf"
+      - "/etc/selenoid/browsers.json"
+      - "-video-output-dir"
+      - "/opt/selenoid/video"
+      - "--log-output-dir"
+      - "/etc/selenoid/logs"
+      - "--service-startup-timeout"
+      - "180s"
+      - "--session-attempt-timeout"
+      - "180s"
+      - "--timeout"
+      - "180s"
+      - "--limit"
+      - "16"
+      - "-container-network"
+      - "qa-automation-ui_default"
+      - "--enable-file-upload"
+      - "--disable-privileged"
+    networks:
+      - qa-net
+
+  selenoid-ui:
+    image: aerokube/selenoid-ui:latest-release
+    container_name: selenoid-ui
+    restart: unless-stopped
+    depends_on:
+      - selenoid
+    ports:
+      - "8082:8080"
+    command:
+      - "--selenoid-uri"
+      - "http://selenoid:4444"
+    volumes:
+      - ./selenoid/output:/output
+      - ./selenoid/video:/opt/selenoid/video
+    extra_hosts:
+      - "testops.domain.net:172.20.0.220"
+      - "web-preprod.domain.net:10.28.34.200"
+      - "api-preprod.domain.net:10.28.34.200"
+      - "pusher-preprod.domain.net:10.28.34.200"
+      - "fileupload-preprod.domain.net:10.28.34.200"
+      - "s3-preprod.domain.net:10.28.34.200"
+      - "web-stage14.domain.net:10.205.98.230"
+      - "api-stage14.domain.net:10.205.98.230"
+      - "pusher-stage14.domain.net:10.205.98.230"
+      - "fileupload-stage14.domain.net:10.205.98.230"
+      - "s3-stage14.domain.net:10.205.98.230"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    networks:
+      - qa-net
+
+volumes:
+  jenkins_home:
+  jenkins_plugins:
+  selenoid_logs:
+
+networks:
+  qa-net:
+    external: true
+    name: qa-automation-ui_default

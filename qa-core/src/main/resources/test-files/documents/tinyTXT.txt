@@ -1,0 +1,371 @@
+ {
+                    "unified": "1F46C",
+                    "keywords": [
+                        "pair",
+                        "couple",
+                        "love",
+                        "like",
+                        "bromance",
+                        "friendship",
+                        "people",
+                        "human"
+                    ],
+                    "emojiString": "👬",
+                    "name": "Two Men Holding Hands",
+                    "sheet": [
+                        20,
+                        31
+                    ]
+                },
+                {
+                    "unified": "1F46D",
+                    "keywords": [
+                        "pair",
+                        "friendship",
+                        "couple",
+                        "love",
+                        "like",
+                        "female",
+                        "people",
+                        "human"
+                    ],
+                    "emojiString": "👭",
+                    "name": "Two Women Holding Hands",
+                    "sheet": [
+                        20,
+                        32
+                    ]
+                },
+                {
+                    "unified": "1F48F",
+                    "obsoleted_by": "1F469-200D-2764-FE0F-200D-1F48B-200D-1F468",
+                    "emojiString": "💏",
+                    "name": "Kiss",
+                    "sheet": [
+                        24,
+                        41
+                    ]
+                },
+                {
+                    "unified": "1F468-200D-2764-FE0F-200D-1F48B-200D-1F468",
+                    "non_qualified": "1F468-200D-2764-200D-1F48B-200D-1F468",
+                    "emojiString": "👨‍❤️‍💋‍👨",
+                    "name": "Man Kiss Man",
+                    "sheet": [
+                        18,
+                        10
+                    ]
+                },
+                {
+                    "unified": "1F469-200D-2764-FE0F-200D-1F48B-200D-1F469",
+                    "non_qualified": "1F469-200D-2764-200D-1F48B-200D-1F469",
+                    "emojiString": "👩‍❤️‍💋‍👩",
+                    "name": "Woman Kiss Woman",
+                    "sheet": [
+                        20,
+                        22
+                    ]
+                },
+                {
+                    "unified": "1F491",
+                    "obsoleted_by": "1F469-200D-2764-FE0F-200D-1F468",
+                    "emojiString": "💑",
+                    "name": "Couple with Heart",
+                    "sheet": [
+                        24,
+                        43
+                    ]
+                },
+                {
+                    "unified": "1F468-200D-2764-FE0F-200D-1F468",
+                    "non_qualified": "1F468-200D-2764-200D-1F468",
+                    "emojiString": "👨‍❤️‍👨",
+                    "name": "Man Heart Man",
+                    "sheet": [
+                        18,
+                        9
+                    ]
+                },
+                {
+                    "unified": "1F469-200D-2764-FE0F-200D-1F469",
+                    "non_qualified": "1F469-200D-2764-200D-1F469",
+                    "emojiString": "👩‍❤️‍👩",
+                    "name": "Woman Heart Woman",
+                    "sheet": [
+                        20,
+                        20
+                    ]
+                },
+                {
+                    "unified": "1F46A",
+                    "short_names": [
+                        "man-woman-boy"
+                    ],
+                    "obsoleted_by": "1F468-200D-1F469-200D-1F466",
+                    "emojiString": "👪",
+                    "name": "Family",
+                    "sheet": [
+                        20,
+                        29
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👩‍👧",
+                    "name": "Man Woman Girl",
+                    "unified": "1F468-200D-1F469-200D-1F467",
+                    "sheet": [
+                        17,
+                        4
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👩‍👧‍👦",
+                    "name": "Man Woman Girl Boy",
+                    "unified": "1F468-200D-1F469-200D-1F467-200D-1F466",
+                    "sheet": [
+                        17,
+                        5
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👩‍👦‍👦",
+                    "name": "Man Woman Boy Boy",
+                    "unified": "1F468-200D-1F469-200D-1F466-200D-1F466",
+                    "sheet": [
+                        17,
+                        3
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👩‍👧‍👧",
+                    "name": "Man Woman Girl Girl",
+                    "unified": "1F468-200D-1F469-200D-1F467-200D-1F467",
+                    "sheet": [
+                        17,
+                        6
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👨‍👦",
+                    "name": "Man Man Boy",
+                    "unified": "1F468-200D-1F468-200D-1F466",
+                    "sheet": [
+                        16,
+                        49
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👨‍👧",
+                    "name": "Man Man Girl",
+                    "unified": "1F468-200D-1F468-200D-1F467",
+                    "sheet": [
+                        16,
+                        51
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👨‍👧‍👦",
+                    "name": "Man Man Girl Boy",
+                    "unified": "1F468-200D-1F468-200D-1F467-200D-1F466",
+                    "sheet": [
+                        17,
+                        0
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👨‍👦‍👦",
+                    "name": "Man Man Boy Boy",
+                    "unified": "1F468-200D-1F468-200D-1F466-200D-1F466",
+                    "sheet": [
+                        16,
+                        50
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👨‍👧‍👧",
+                    "name": "Man Man Girl Girl",
+                    "unified": "1F468-200D-1F468-200D-1F467-200D-1F467",
+                    "sheet": [
+                        17,
+                        1
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👩‍👦",
+                    "name": "Woman Woman Boy",
+                    "unified": "1F469-200D-1F469-200D-1F466",
+                    "sheet": [
+                        19,
+                        12
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👩‍👧",
+                    "name": "Woman Woman Girl",
+                    "unified": "1F469-200D-1F469-200D-1F467",
+                    "sheet": [
+                        19,
+                        14
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👩‍👧‍👦",
+                    "name": "Woman Woman Girl Boy",
+                    "unified": "1F469-200D-1F469-200D-1F467-200D-1F466",
+                    "sheet": [
+                        19,
+                        15
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👩‍👦‍👦",
+                    "name": "Woman Woman Boy Boy",
+                    "unified": "1F469-200D-1F469-200D-1F466-200D-1F466",
+                    "sheet": [
+                        19,
+                        13
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👩‍👧‍👧",
+                    "name": "Woman Woman Girl Girl",
+                    "unified": "1F469-200D-1F469-200D-1F467-200D-1F467",
+                    "sheet": [
+                        19,
+                        16
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👦",
+                    "name": "Man Boy",
+                    "unified": "1F468-200D-1F466",
+                    "sheet": [
+                        16,
+                        45
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👦‍👦",
+                    "name": "Man Boy Boy",
+                    "unified": "1F468-200D-1F466-200D-1F466",
+                    "sheet": [
+                        16,
+                        44
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👧",
+                    "name": "Man Girl",
+                    "unified": "1F468-200D-1F467",
+                    "sheet": [
+                        16,
+                        48
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👧‍👦",
+                    "name": "Man Girl Boy",
+                    "unified": "1F468-200D-1F467-200D-1F466",
+                    "sheet": [
+                        16,
+                        46
+                    ]
+                },
+                {
+                    "emojiString": "👨‍👧‍👧",
+                    "name": "Man Girl Girl",
+                    "unified": "1F468-200D-1F467-200D-1F467",
+                    "sheet": [
+                        16,
+                        47
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👦",
+                    "name": "Woman Boy",
+                    "unified": "1F469-200D-1F466",
+                    "sheet": [
+                        19,
+                        8
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👦‍👦",
+                    "name": "Woman Boy Boy",
+                    "unified": "1F469-200D-1F466-200D-1F466",
+                    "sheet": [
+                        19,
+                        7
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👧",
+                    "name": "Woman Girl",
+                    "unified": "1F469-200D-1F467",
+                    "sheet": [
+                        19,
+                        11
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👧‍👦",
+                    "name": "Woman Girl Boy",
+                    "unified": "1F469-200D-1F467-200D-1F466",
+                    "sheet": [
+                        19,
+                        9
+                    ]
+                },
+                {
+                    "emojiString": "👩‍👧‍👧",
+                    "name": "Woman Girl Girl",
+                    "unified": "1F469-200D-1F467-200D-1F467",
+                    "sheet": [
+                        19,
+                        10
+                    ]
+                },
+
+{
+                    "unified": "1F984",
+                    "added_in": 8,
+                    "emojiString": "🦄",
+                    "name": "Unicorn Face",
+                    "sheet": [
+                        42,
+                        28
+                    ]
+                },
+
+ {
+                    "unified": "1F308",
+                    "keywords": [
+                        "nature",
+                        "happy",
+                        "unicorn_face",
+                        "photo",
+                        "sky",
+                        "spring"
+                    ],
+                    "emojiString": "🌈",
+                    "name": "Rainbow",
+                    "sheet": [
+                        6,
+                        0
+                    ]
+                },
+
+ {
+                    "unified": "1F3F3-FE0F-200D-1F308",
+                    "added_in": 7,
+                    "emojiString": "🏳️‍🌈",
+                    "name": "Rainbow Flag",
+                    "non_qualified": "1F3F3-200D-1F308",
+                    "sheet": [
+                        12,
+                        14
+                    ]
+                },
+
+
+

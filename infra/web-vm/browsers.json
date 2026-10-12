@@ -1,0 +1,40 @@
+{
+  "chrome": {
+    "128.0": {
+      "image": "selenoid/vnc:chrome_128.0",
+      "port": "4444",
+      "path": "/",
+      "timeout": "1m",
+      "shmSize": 2147483648,
+      "screenResolution": "1920x1080x24",
+      "hosts": [
+        "web-preprod.domain.net:10.28.34.200",
+        "api-preprod.domain.net:10.28.34.200",
+        "pusher-preprod.domain.net:10.28.34.200",
+        "fileupload-preprod.domain.net:10.28.34.200",
+        "s3-preprod.domain.net:10.28.34.200",
+        "web-stage14.domain.net:10.205.98.230",
+        "api-stage14.domain.net:10.205.98.230",
+        "pusher-stage14.domain.net:10.205.98.230",
+        "fileupload-stage14.domain.net:10.205.98.230",
+        "s3-stage14.domain.net:10.205.98.230",
+        "testops.domain.net:172.20.0.220"
+      ],
+      "env": [
+        "DISPLAY=:99",
+        "CHROME_LOG_FILE=/tmp/chrome_logs/chrome.log",
+        "LANG=ru_RU.UTF-8",
+        "DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null"
+      ],
+      "tmpfs": {
+        "/tmp": "size=512m"
+      },
+      "cpu": "1.0",
+      "mem": "1g",
+      "labels": {
+        "name": "chrome-128"
+      },
+      "network": "qa-net"
+    }
+  }
+}

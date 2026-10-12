@@ -1,0 +1,545 @@
+/**
+ * Symmetric key rotation (SKR) — dedicated pipeline.
+ *
+ * Jenkins jobs:
+ *   encryption_api_stg14   → stage14
+ *   encryption_api_preprod → preprod
+ *
+ * IMPORTANT: Pipeline → SCM "Branches to build" must match params.BRANCH.
+ * Jenkins loads this file from the SCM branch of the job, NOT from BRANCH param.
+ * If SCM points to main while BRANCH=feature, you run an old Jenkinsfile against new code.
+ *
+ * Execution model (4 parallel streams):
+ *   1. API      — server contract (REST/SSE), Jenkins + Maven
+ *   2. Web E2E  — Selenoid browser, Jenkins
+ *   3. Android  — Appium, mac-mobile agent
+ *   4. iOS      — Appium, mac-mobile agent
+ *
+ * Allure TestOps: каждый стрим = отдельный launch (mvn → allurectl upload).
+ * Перед upload сбрасываем CI/ALLURE_JOB_* — иначе Jenkins CI recognition
+ * клеит всё в один Job Run (#BUILD) с именем первого стрима (API).
+ *
+ * CRITICAL: Jenkins "Branches to build" для Script Path должен указывать на ветку
+ * с этим Jenkinsfile (часто это main). params.BRANCH влияет только на Prepare checkout.
+ *
+ * JUnit tag: encryption-suite (excluded from main regression via -DexcludedGroups=encryption-suite)
+ *
+ * TTL ключа на сервере = 1 мин (preprod и stage14). Набор как на stage14:
+ * API/Web/Mobile без soak. key-ttl входит в этот прогон.
+ * Soak — отдельно, Jenkinsfile.encryption.soak.
+ *
+ * Пользователи стримов не пересекаются (verifyCode / один ключ на двоих).
+ * Peer на UI — только API-отправитель входящих, не вторая UI-сессия.
+ *
+ * Mobile preprod: /Users/messengerqa/mobile-apps (tango_preprod.apk + Messenger.app).
+ * Stage14: /Users/messengerqa/NOT-PREPROD-mobile-apps. Node env агента не перетирает путь.
+ */
+pipeline {
+    agent any
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    parameters {
+        choice(
+            name: 'ENV',
+            choices: ['stage14', 'preprod'],
+            description: 'Target environment. Auto-detected from JOB_NAME when possible.'
+        )
+        string(
+            name: 'BRANCH',
+            defaultValue: 'main',
+            description: 'Git branch'
+        )
+        string(
+            name: 'API_USER',
+            defaultValue: 'TEST47',
+            description: 'API stream only. Не шарить с Web/Android/iOS.'
+        )
+        string(
+            name: 'WEB_USER',
+            defaultValue: 'TEST61',
+            description: 'Web E2E owner'
+        )
+        string(
+            name: 'WEB_PEER',
+            defaultValue: 'TEST62',
+            description: 'Web E2E peer (API inbound, не UI)'
+        )
+        string(
+            name: 'ANDROID_USER',
+            defaultValue: 'TEST63',
+            description: 'Android E2E owner'
+        )
+        string(
+            name: 'ANDROID_PEER',
+            defaultValue: 'TEST64',
+            description: 'Android E2E peer (API inbound, не UI)'
+        )
+        string(
+            name: 'IOS_USER',
+            defaultValue: 'TEST65',
+            description: 'iOS E2E owner'
+        )
+        string(
+            name: 'IOS_PEER',
+            defaultValue: 'TEST66',
+            description: 'iOS E2E peer (API inbound, не UI)'
+        )
+        string(
+            name: 'ANDROID_APK',
+            defaultValue: '',
+            description: 'APK filename in MOBILE_APPS_DIR. Empty = foxtrot_dev.apk (stage14) or tango_preprod.apk (preprod).'
+        )
+        booleanParam(
+            name: 'SKIP_API',
+            defaultValue: false,
+            description: 'Skip API stream (debug)'
+        )
+        booleanParam(
+            name: 'SKIP_WEB',
+            defaultValue: false,
+            description: 'Skip Web E2E'
+        )
+        booleanParam(
+            name: 'SKIP_ANDROID',
+            defaultValue: false,
+            description: 'Skip Android E2E'
+        )
+        booleanParam(
+            name: 'SKIP_IOS',
+            defaultValue: false,
+            description: 'Skip iOS E2E'
+        )
+    }
+
+    environment {
+        SELENOID_URL = 'http://selenoid:4444/wd/hub'
+        SELENOID_BASE = 'http://selenoid:4444'
+        ALLURE_ENDPOINT = 'https://testops.domain.net'
+        ALLURE_PROJECT_ID = '8'
+        JAVA_TOOL_OPTIONS = '-Dfile.encoding=UTF-8'
+        MAVEN_OPTS = '-Xmx2g -Dfile.encoding=UTF-8'
+    }
+
+    stages {
+        stage('Prepare') {
+            steps {
+                script {
+                    env.TARGET_ENV = resolveTargetEnv()
+                    env.MAVEN_PROFILE = env.TARGET_ENV == 'stage14' ? '-Pstage14' : ''
+                    env.LAUNCH_PREFIX = "Encryption ${env.TARGET_ENV}"
+                    env.KEY_TTL_MINUTES = '1'
+                    // stage14: актуальный debug-билд; iOS — Messenger.app (без переименования)
+                    env.MOBILE_APK = params.ANDROID_APK?.trim()
+                            ? params.ANDROID_APK.trim()
+                            : (env.TARGET_ENV == 'stage14'
+                            ? 'foxtrot_dev.apk'
+                            : 'tango_preprod.apk')
+                    // Node env mac-mobile не используем: preprod и stage14 — разные папки.
+                    env.MOBILE_APPS_DIR = env.TARGET_ENV == 'stage14'
+                            ? '/Users/messengerqa/NOT-PREPROD-mobile-apps'
+                            : '/Users/messengerqa/mobile-apps'
+
+                    echo "Job=${env.JOB_NAME} | Env=${env.TARGET_ENV} | Branch=${params.BRANCH} | TTL=${env.KEY_TTL_MINUTES} | APK=${env.MOBILE_APK} | appsDir=${env.MOBILE_APPS_DIR} | users api=${params.API_USER} web=${params.WEB_USER}/${params.WEB_PEER} android=${params.ANDROID_USER}/${params.ANDROID_PEER} ios=${params.IOS_USER}/${params.IOS_PEER}"
+
+                    cleanWs()
+                    checkout([
+                        $class           : 'GitSCM',
+                        branches         : [[name: "*/${params.BRANCH}"]],
+                        userRemoteConfigs: scm.userRemoteConfigs
+                    ])
+
+                    sh """
+                        mvn install -DskipTests -pl web-tests,mobile-tests -am ${env.MAVEN_PROFILE} -B -q
+                    """
+
+                    withCredentials([string(credentialsId: 'allure-api-key', variable: 'ALLURE_TOKEN')]) {
+                        configureAllure(env.ALLURE_TOKEN)
+                    }
+
+                    stash name: 'encryption-built', includes: '**/*', excludes: '**/.git/**'
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            parallel {
+                stage('API') {
+                    when { expression { !params.SKIP_API } }
+                    steps {
+                        script {
+                            runOnIsolatedWorkspace('api') {
+                                withCredentials([string(credentialsId: 'allure-api-key', variable: 'ALLURE_TOKEN')]) {
+                                    runWebModuleTests(
+                                        streamId: 'api',
+                                        launchName: "${env.LAUNCH_PREFIX} - API",
+                                        groups: 'encryption-suite & api & !soak & !chaos',
+                                        logFile: 'logs/encryption-api.log',
+                                        extraProps: "-Dencryption.test.user=${params.API_USER} " +
+                                                "-Dencryption.peer.user=${params.API_USER} " +
+                                                "-Dencryption.key.ttl.minutes=${env.KEY_TTL_MINUTES} " +
+                                                '-Dthread-count=1'
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                stage('Web E2E') {
+                    when { expression { !params.SKIP_WEB } }
+                    steps {
+                        script {
+                            runOnIsolatedWorkspace('web') {
+                                setupSelenoid()
+                                try {
+                                    withCredentials([string(credentialsId: 'allure-api-key', variable: 'ALLURE_TOKEN')]) {
+                                        runWebModuleTests(
+                                            streamId: 'web',
+                                            launchName: "${env.LAUNCH_PREFIX} - Web",
+                                            groups: 'encryption-suite & web & !soak',
+                                            logFile: 'logs/encryption-web.log',
+                                            extraProps: "-Dremote=true " +
+                                                    "-Drun.channel=web " +
+                                                    "-Dselenide.remote=${env.SELENOID_URL} " +
+                                                    "-Dselenoid.hub.url=${env.SELENOID_URL} " +
+                                                    "-Dencryption.test.user=${params.WEB_USER} " +
+                                                    "-Dencryption.peer.user=${params.WEB_PEER} " +
+                                                    "-Dencryption.key.ttl.minutes=${env.KEY_TTL_MINUTES} " +
+                                                    '-Dthread-count=1'
+                                        )
+                                    }
+                                } finally {
+                                    cleanupSelenoid()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                stage('Android E2E') {
+                    when { expression { !params.SKIP_ANDROID } }
+                    agent { label 'mac-mobile' }
+                    steps {
+                        script {
+                            catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                                runMobileStream('android')
+                            }
+                        }
+                    }
+                }
+
+                stage('iOS E2E') {
+                    when { expression { !params.SKIP_IOS } }
+                    agent { label 'mac-mobile' }
+                    steps {
+                        script {
+                            runMobileStream('ios')
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+            archiveArtifacts artifacts: 'logs/**/*.log, **/target/surefire-reports/**/*', allowEmptyArchive: true
+        }
+        failure {
+            echo 'Encryption pipeline failed. Check logs/encryption-*.log'
+        }
+    }
+}
+
+// ============= Helper Methods =============
+
+def resolveTargetEnv() {
+    def job = env.JOB_NAME?.toLowerCase() ?: ''
+    if (job.contains('stg14') || job.contains('stage14')) {
+        return 'stage14'
+    }
+    if (job.contains('preprod')) {
+        return 'preprod'
+    }
+    return params.ENV
+}
+
+def configureAllure(token) {
+    // Jenkins agent: /var/jenkins_home; mac-mobile: $HOME — путь через HOME работает везде
+    sh """
+        ALLURE_HOME="\${HOME:-/var/jenkins_home}/.allure"
+        mkdir -p "\$ALLURE_HOME" logs
+        cat > "\$ALLURE_HOME/config.yaml" <<EOF
+project_id: ${ALLURE_PROJECT_ID}
+endpoint: ${ALLURE_ENDPOINT}
+token: ${token}
+EOF
+    """
+}
+
+def runOnIsolatedWorkspace(String suffix, Closure body) {
+    def mainWs = env.WORKSPACE
+    ws("${env.WORKSPACE}@${suffix}") {
+        cleanWs()
+        unstash 'encryption-built'
+        try {
+            body()
+        } finally {
+            // Результаты лежат в @api/@web — копируем в основной workspace для junit/archive
+            sh """
+                mkdir -p '${mainWs}/logs' \\
+                         '${mainWs}/web-tests/target/surefire-reports' \\
+                         '${mainWs}/web-tests/target/allure-results'
+                cp -a logs/. '${mainWs}/logs/' 2>/dev/null || true
+                cp -a web-tests/target/surefire-reports/. '${mainWs}/web-tests/target/surefire-reports/' 2>/dev/null || true
+                cp -a web-tests/target/allure-results/. '${mainWs}/web-tests/target/allure-results/' 2>/dev/null || true
+            """
+        }
+    }
+}
+
+/**
+ * groups через env + wrapper-скрипт: allurectl/shell иначе рвут
+ * "encryption-suite & api" по символу & (даже в кавычках).
+ *
+ * cfg.streamId — api|web. Каждый стрим = отдельный Allure launch.
+ * Важно: Jenkins→TestOps CI recognition клеит всё в Job Run = BUILD_NUMBER;
+ * поэтому перед allurectl сбрасываем CI/ALLURE_JOB_* и задаём уникальный job-run-uid.
+ *
+ * ВНИМАНИЕ: Pipeline Script Path Jenkinsfile грузится из SCM "Branches to build"
+ * (часто main), а не из params.BRANCH. Фикс должен быть в той ветке, откуда
+ * Jenkins читает Jenkinsfile.encryption.
+ */
+def runWebModuleTests(Map cfg) {
+    def streamId = cfg.streamId ?: 'web'
+    withEnv([
+            "JUNIT_GROUPS=${cfg.groups}",
+            "LAUNCH_NAME=${cfg.launchName}",
+            "LOG_FILE=${cfg.logFile}",
+            "EXTRA_PROPS=${cfg.extraProps ?: ''}",
+            "ALLURE_TOKEN=${ALLURE_TOKEN}",
+            "ALLURE_STREAM_ID=${streamId}"
+    ]) {
+        sh '''
+            set -e
+            mkdir -p logs web-tests/target/allure-results
+
+            cat > logs/run-web-module.sh <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+mvn test -pl web-tests ${MAVEN_PROFILE} -B \\
+  -Dmaven.main.skip=true \\
+  -Dgroups="\${JUNIT_GROUPS}" \\
+  -DfailIfNoTests=true \\
+  ${EXTRA_PROPS}
+EOF
+            chmod +x logs/run-web-module.sh
+
+            # --- отдельный Allure launch на стрим ---
+            # иначе: "CI successfully recognized: jenkins" → Job Run=#BUILD → один Launch
+            unset CI || true
+            unset ALLURE_CI_TYPE ALLURE_JOB_RUN_ID ALLURE_LAUNCH_ID || true
+            unset ALLURE_JOB_UID ALLURE_JOB_NAME ALLURE_JOB_URL || true
+            unset ALLURE_JOB_RUN_UID ALLURE_JOB_RUN_NAME ALLURE_JOB_RUN_URL ALLURE_JOB_RUN_BRANCH || true
+
+            export ALLURE_LAUNCH_NAME="${LAUNCH_NAME}"
+            export ALLURE_JOB_UID="${JOB_BASE_NAME:-encryption}-${ALLURE_STREAM_ID}"
+            export ALLURE_JOB_RUN_UID="${BUILD_NUMBER}-${ALLURE_STREAM_ID}"
+
+            echo "Running: groups=[$JUNIT_GROUPS] launch=[$LAUNCH_NAME] job-run-uid=[$ALLURE_JOB_RUN_UID] job-uid=[$ALLURE_JOB_UID]"
+            echo "Allure CI detach: CI=${CI:-<unset>} ALLURE_CI_TYPE=${ALLURE_CI_TYPE:-<unset>}"
+
+            # mvn отдельно, upload отдельно — надёжнее, чем watch в CI-mode
+            # surefire пишет в web-tests/target/allure-results (не в root target/)
+            set +e
+            ./logs/run-web-module.sh > "${LOG_FILE}" 2>&1
+            TEST_EC=$?
+            set -e
+
+            RESULTS_DIR=web-tests/target/allure-results
+            echo "Allure results after tests: $RESULTS_DIR files=$(find "$RESULTS_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')" | tee -a "${LOG_FILE}"
+
+            allurectl upload \
+                --endpoint="${ALLURE_ENDPOINT}" \
+                --project-id="${ALLURE_PROJECT_ID}" \
+                --launch-name="${LAUNCH_NAME}" \
+                --job-uid="${ALLURE_JOB_UID}" \
+                --job-run-uid="${ALLURE_JOB_RUN_UID}" \
+                "${RESULTS_DIR}" \
+                >> "${LOG_FILE}" 2>&1 \
+                || { echo "==== allurectl upload failed ===="; tail -n 80 "${LOG_FILE}"; exit 1; }
+
+            if [ "$TEST_EC" -ne 0 ]; then
+                echo "==== ${LOG_FILE} (tests failed, ec=$TEST_EC) ===="
+                cat "${LOG_FILE}"
+                exit "$TEST_EC"
+            fi
+        '''
+    }
+}
+
+def runMobileStream(String platform) {
+    cleanWs()
+    unstash 'encryption-built'
+
+    prepareMobileApp(platform)
+
+    withCredentials([string(credentialsId: 'allure-api-key', variable: 'ALLURE_TOKEN')]) {
+        configureAllure(env.ALLURE_TOKEN)
+
+        def capitalized = platform.substring(0, 1).toUpperCase() + platform.substring(1)
+        // Не тянем чужие network-fault скелеты: AND-* → только android, IOS-* → только ios.
+        // Общие SKR-MOB-* с тегом mobile (без android/ios) остаются в обоих стримах.
+        def junitGroups = platform == 'android'
+                ? 'encryption-suite & mobile & !soak & !ios & !chaos'
+                : 'encryption-suite & mobile & !soak & !android & !chaos'
+        def testUser = platform == 'android' ? params.ANDROID_USER : params.IOS_USER
+        def peerUser = platform == 'android' ? params.ANDROID_PEER : params.IOS_PEER
+        withEnv([
+                "JUNIT_GROUPS=${junitGroups}",
+                "LAUNCH_NAME=${env.LAUNCH_PREFIX} - ${capitalized}",
+                "LOG_FILE=logs/encryption-${platform}.log",
+                "PLATFORM_NAME=${platform}",
+                "TEST_USER=${testUser}",
+                "PEER_USER=${peerUser}",
+                "KEY_TTL_MINUTES=${env.KEY_TTL_MINUTES}",
+                "ALLURE_TOKEN=${ALLURE_TOKEN}",
+                "ALLURE_STREAM_ID=${platform}"
+        ]) {
+            try {
+                sh '''
+                    set -e
+                    mkdir -p logs mobile-tests/target/allure-results
+                    export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+                    export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+                    cat > logs/run-mobile-module.sh <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+export ANDROID_HOME="\${ANDROID_HOME:-\${ANDROID_SDK_ROOT:-\$HOME/Library/Android/sdk}}"
+export PATH="\$ANDROID_HOME/cmdline-tools/latest/bin:\$ANDROID_HOME/platform-tools:\$PATH"
+mvn install -DskipTests -pl mobile-tests -am ${MAVEN_PROFILE} -B -q
+mvn test -pl mobile-tests ${MAVEN_PROFILE} -B \\
+  -Dplatform.name="\${PLATFORM_NAME}" \\
+  -Dgroups="\${JUNIT_GROUPS}" \\
+  -Dencryption.test.user="\${TEST_USER}" \\
+  -Dencryption.peer.user="\${PEER_USER}" \\
+  -Dencryption.key.ttl.minutes="\${KEY_TTL_MINUTES}" \\
+  -Dandroid.apk.file.name="\${MOBILE_APK}" \\
+  -Djunit.jupiter.execution.parallel.enabled=false \\
+  -Dthread.count=1 \\
+  -DfailIfNoTests=true
+EOF
+                    chmod +x logs/run-mobile-module.sh
+
+                    unset CI || true
+                    unset ALLURE_CI_TYPE ALLURE_JOB_RUN_ID ALLURE_LAUNCH_ID || true
+                    unset ALLURE_JOB_UID ALLURE_JOB_NAME ALLURE_JOB_URL || true
+                    unset ALLURE_JOB_RUN_UID ALLURE_JOB_RUN_NAME ALLURE_JOB_RUN_URL ALLURE_JOB_RUN_BRANCH || true
+
+                    export ALLURE_LAUNCH_NAME="${LAUNCH_NAME}"
+                    export ALLURE_JOB_UID="${JOB_BASE_NAME:-encryption}-${ALLURE_STREAM_ID}"
+                    export ALLURE_JOB_RUN_UID="${BUILD_NUMBER}-${ALLURE_STREAM_ID}"
+
+                    echo "Running mobile: platform=[$PLATFORM_NAME] launch=[$LAUNCH_NAME] job-run-uid=[$ALLURE_JOB_RUN_UID]"
+                    echo "apkanalyzer=$(command -v apkanalyzer || echo NOT_FOUND) ANDROID_HOME=$ANDROID_HOME"
+                    echo "Allure CI detach: CI=${CI:-<unset>} ALLURE_CI_TYPE=${ALLURE_CI_TYPE:-<unset>}"
+
+                    set +e
+                    ./logs/run-mobile-module.sh > "${LOG_FILE}" 2>&1
+                    TEST_EC=$?
+                    set -e
+
+                    allurectl upload \
+                        --endpoint="${ALLURE_ENDPOINT}" \
+                        --project-id="${ALLURE_PROJECT_ID}" \
+                        --launch-name="${LAUNCH_NAME}" \
+                        --job-uid="${ALLURE_JOB_UID}" \
+                        --job-run-uid="${ALLURE_JOB_RUN_UID}" \
+                        mobile-tests/target/allure-results \
+                        >> "${LOG_FILE}" 2>&1 \
+                        || { echo "==== allurectl upload failed ===="; tail -n 80 "${LOG_FILE}"; exit 1; }
+
+                    if [ "$TEST_EC" -ne 0 ]; then
+                        echo "==== ${LOG_FILE} (tests failed, ec=$TEST_EC) ===="
+                        cat "${LOG_FILE}"
+                        exit "$TEST_EC"
+                    fi
+                '''
+            } finally {
+                archiveArtifacts artifacts: "logs/**/*.log, mobile-tests/build/reports/**/*, mobile-tests/target/surefire-reports/**/*, mobile-tests/target/skr-ui-dump*.txt", allowEmptyArchive: true
+            }
+        }
+    }
+}
+
+def prepareMobileApp(String platform) {
+    // Жёстко: node env mac-mobile не должен подменить папку на RC/stage.
+    def appsDir = env.TARGET_ENV == 'stage14'
+            ? '/Users/messengerqa/NOT-PREPROD-mobile-apps'
+            : '/Users/messengerqa/mobile-apps'
+    def apkName = params.ANDROID_APK?.trim()
+            ? params.ANDROID_APK.trim()
+            : (env.TARGET_ENV == 'stage14' ? 'foxtrot_dev.apk' : 'tango_preprod.apk')
+    env.MOBILE_APPS_DIR = appsDir
+    env.MOBILE_APK = apkName
+    echo "prepareMobileApp platform=${platform} appsDir=${appsDir} apk=${apkName}"
+
+    withEnv(["MOBILE_APPS_DIR=${appsDir}", "MOBILE_APK=${apkName}"]) {
+        sh """
+            mkdir -p logs mobile-tests/src/test/resources/application
+
+            if [ -z "\${MOBILE_APPS_DIR}" ] || [ ! -d "\${MOBILE_APPS_DIR}" ]; then
+                echo "ERROR: MOBILE_APPS_DIR missing or not a directory: \${MOBILE_APPS_DIR}"
+                exit 1
+            fi
+
+            if [ "${platform}" = "android" ]; then
+                APK_SRC=""
+                if [ -f "\${MOBILE_APPS_DIR}/\${MOBILE_APK}" ]; then
+                    APK_SRC="\${MOBILE_APPS_DIR}/\${MOBILE_APK}"
+                elif [ "${env.TARGET_ENV}" = "stage14" ]; then
+                    APK_SRC=\$(ls -t "\${MOBILE_APPS_DIR}"/foxtrot*.apk 2>/dev/null | head -n 1 || true)
+                fi
+                if [ -z "\$APK_SRC" ]; then
+                    echo "ERROR: APK not found. Looked for \${MOBILE_APK} in \${MOBILE_APPS_DIR}"
+                    echo "Available files:"
+                    ls -la "\${MOBILE_APPS_DIR}" || true
+                    exit 1
+                fi
+                echo "Using Android APK: \$APK_SRC -> \${MOBILE_APK}"
+                cp "\$APK_SRC" "mobile-tests/src/test/resources/application/\${MOBILE_APK}"
+                ls -lh "mobile-tests/src/test/resources/application/\${MOBILE_APK}"
+            fi
+
+            if [ "${platform}" = "ios" ]; then
+                rm -rf mobile-tests/src/test/resources/application/Messenger.app
+                cp -R "\${MOBILE_APPS_DIR}/Messenger.app" \\
+                      "mobile-tests/src/test/resources/application/Messenger.app"
+                ls -lah mobile-tests/src/test/resources/application/Messenger.app
+            fi
+        """
+    }
+}
+
+def setupSelenoid() {
+    sh '''
+        mkdir -p logs
+        docker images | grep -q "selenoid/chrome.*128.0" || docker pull selenoid/chrome:128.0
+        docker images | grep -q "selenoid/video-recorder" || docker pull selenoid/video-recorder:latest-release
+        docker ps -aq --filter ancestor=selenoid/chrome:128.0 | xargs -r docker rm -f || true
+    '''
+}
+
+def cleanupSelenoid() {
+    sh '''
+        curl -X DELETE ${SELENOID_URL}/session/* 2>&1 || true
+        docker ps -aq --filter ancestor=selenoid/chrome:128.0 | xargs -r docker rm -f || true
+    '''
+}

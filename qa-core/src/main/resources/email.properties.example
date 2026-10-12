@@ -1,0 +1,12 @@
+# Инструкция:
+# 1. Скопируйте этот файл как email.local.properties (в ту же папку).
+# 2. Заполните imap.password — App Password от Gmail (не обычный пароль).
+# 3. email.local.properties не попадает в git — там хранятся секреты.
+# 4. В CI credentials задаются через Jenkins Credential qa-imap-credentials (см. Jenkinsfile).
+
+imap.host=imap.gmail.com
+imap.port=993
+imap.user=qa.auto.alerts@gmail.com
+imap.password=
+# Базовый адрес для invite; в тестах генерируется уникальный qa.auto.alerts+<tag>@gmail.com (Gmail plus addressing)
+email.address=qa.auto.alerts@gmail.com

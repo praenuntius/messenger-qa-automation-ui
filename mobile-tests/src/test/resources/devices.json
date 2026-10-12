@@ -1,0 +1,22 @@
+{
+  "devices": [
+    {
+      "platform": "Android",
+      "deviceName": "Android_medium_phone",
+      "driverName": "UiAutomator2",
+      "platformVersion": "16",
+      "language": "ru",
+      "locale": "RU",
+      "enabled": false
+    },
+    {
+      "platform": "iOS",
+      "deviceName": "iPhone 17",
+      "driverName": "XCUITest",
+      "platformVersion": "26.4",
+      "language": "ru",
+      "locale": "ru_RU",
+      "enabled": false
+    }
+  ]
+}

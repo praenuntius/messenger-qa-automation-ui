@@ -1,0 +1,233 @@
+/**
+ * Оркестратор full-regression.
+ *
+ * Порядок запуска (разные ВМ не мешают друг другу в фазе 1):
+ *   Фаза 1 — параллельно: web (Linux ВМ) + mobile Android + mobile iOS (Mac ВМ)
+ *   Фаза 2 — desktop Linux (та же Linux ВМ, после завершения web)
+ *
+ * Имена downstream job — config/ci/pipelines.properties
+ */
+pipeline {
+    agent any
+
+    options {
+        skipDefaultCheckout(true)
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    parameters {
+        string(
+                name: 'BRANCH_NAME',
+                defaultValue: 'main',
+                description: 'Ветка для mobile и desktop downstream jobs'
+        )
+        choice(
+                name: 'MODE',
+                choices: ['BASE', 'FULL'],
+                description: 'Режим для всех downstream jobs'
+        )
+        choice(
+                name: 'THREAD_COUNT',
+                choices: ['4', '1', '2', '3'],
+                description: 'Потоки для web job'
+        )
+        choice(
+                name: 'DESKTOP_THREAD_COUNT',
+                choices: ['1', '2', '3', '4'],
+                description: 'Потоки для desktop job (рекомендуется 1 на shared Linux ВМ)'
+        )
+        booleanParam(
+                name: 'RUN_WEB',
+                defaultValue: true,
+                description: 'Запустить web pipeline (Selenoid, Linux ВМ)'
+        )
+        booleanParam(
+                name: 'RUN_DESKTOP',
+                defaultValue: true,
+                description: 'Фаза 2: desktop Linux (после web, та же Linux ВМ)'
+        )
+        booleanParam(
+                name: 'RUN_DESKTOP_MAC',
+                defaultValue: false,
+                description: 'Фаза 3: desktop Mac (Mac ВМ, после фазы 1; не параллельно с mobile)'
+        )
+        booleanParam(
+                name: 'RUN_MOBILE_ANDROID',
+                defaultValue: true,
+                description: 'Запустить mobile Android (Mac ВМ, параллельно с web)'
+        )
+        booleanParam(
+                name: 'RUN_MOBILE_IOS',
+                defaultValue: true,
+                description: 'Запустить mobile iOS (Mac ВМ, параллельно с web)'
+        )
+        booleanParam(
+                name: 'SKIP_CLEANUP',
+                defaultValue: false,
+                description: 'Передать SKIP_CLEANUP в downstream jobs'
+        )
+    }
+
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    cleanWs()
+                    checkout scm
+                    loadOrchestratorConfig()
+                    echo "Full regression #${env.BUILD_NUMBER} — branch: ${params.BRANCH_NAME}"
+                    echo "Фаза 1 (parallel): web=${params.RUN_WEB}, mobile-android=${params.RUN_MOBILE_ANDROID}, mobile-ios=${params.RUN_MOBILE_IOS}"
+                    echo "Фаза 2: desktop Linux=${params.RUN_DESKTOP}"
+                    echo "Фаза 3: desktop Mac=${params.RUN_DESKTOP_MAC}"
+                }
+            }
+        }
+
+        stage('Phase 1: Web + Mobile') {
+            steps {
+                script {
+                    def phase1 = [:]
+
+                    if (params.RUN_WEB) {
+                        phase1['Web (Selenoid)'] = {
+                            triggerWebJob()
+                        }
+                    }
+
+                    if (params.RUN_MOBILE_ANDROID) {
+                        phase1['Mobile Android'] = {
+                            triggerMobileAndroidJob()
+                        }
+                    }
+
+                    if (params.RUN_MOBILE_IOS) {
+                        phase1['Mobile iOS'] = {
+                            triggerMobileIosJob()
+                        }
+                    }
+
+                    if (phase1.isEmpty()) {
+                        echo 'Фаза 1 пропущена (RUN_WEB=false, RUN_MOBILE_*=false)'
+                    } else {
+                        parallel phase1
+                    }
+                }
+            }
+        }
+
+        stage('Phase 2: Desktop Linux') {
+            when {
+                expression { params.RUN_DESKTOP }
+            }
+            steps {
+                script {
+                    triggerDesktopLinuxJob()
+                }
+            }
+        }
+
+        stage('Phase 3: Desktop Mac') {
+            when {
+                expression { params.RUN_DESKTOP_MAC }
+            }
+            steps {
+                script {
+                    triggerDesktopMacJob()
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                archiveArtifacts artifacts: 'logs/**/*.log', allowEmptyArchive: true
+            }
+        }
+        failure {
+            echo 'Full regression failed. Проверьте downstream jobs в Jenkins.'
+        }
+        success {
+            echo "Full regression completed. Launch: ${env.ORCHESTRATOR_LAUNCH_NAME}"
+        }
+    }
+}
+
+// ============= Helper Methods =============
+
+def loadOrchestratorConfig() {
+    def rp = load 'jenkins/runProfile.groovy'
+    def pipelinesCi = rp.loadPipelinesCi()
+    def allureCi = rp.loadAllureCi()
+
+    env.WEB_JOB = pipelinesCi['pipeline.web.jenkins.job']
+    env.WEB_PROFILE = pipelinesCi['pipeline.web.profile']
+    env.DESKTOP_LINUX_JOB = pipelinesCi['pipeline.desktop.linux.jenkins.job']
+    env.DESKTOP_LINUX_PROFILE = pipelinesCi['pipeline.desktop.linux.profile']
+    env.DESKTOP_MAC_JOB = pipelinesCi['pipeline.desktop.mac.jenkins.job']
+    env.DESKTOP_MAC_PROFILE = pipelinesCi['pipeline.desktop.mac.profile']
+    env.MOBILE_ANDROID_JOB = pipelinesCi['pipeline.mobile.android.jenkins.job']
+    env.MOBILE_IOS_JOB = pipelinesCi['pipeline.mobile.ios.jenkins.job']
+    env.MOBILE_ANDROID_PROFILE = pipelinesCi['pipeline.mobile.android.profile']
+    env.MOBILE_IOS_PROFILE = pipelinesCi['pipeline.mobile.ios.profile']
+
+    env.ORCHESTRATOR_LAUNCH_NAME = rp.resolveLaunchName(
+            rp.resolveDottedKey(allureCi, 'allure.launch.full-regression'), [
+            'BRANCH_NAME': params.BRANCH_NAME,
+    ])
+
+    echo "Downstream: web=${env.WEB_JOB}, desktop-linux=${env.DESKTOP_LINUX_JOB}, desktop-mac=${env.DESKTOP_MAC_JOB}, " +
+            "mobile-android=${env.MOBILE_ANDROID_JOB}, mobile-ios=${env.MOBILE_IOS_JOB}"
+    echo "Orchestrator launch name: ${env.ORCHESTRATOR_LAUNCH_NAME}"
+}
+
+def triggerWebJob() {
+    build job: env.WEB_JOB, wait: true, propagate: true, parameters: [
+            string(name: 'PROFILE', value: env.WEB_PROFILE),
+            string(name: 'MODE', value: params.MODE),
+            string(name: 'THREAD_COUNT', value: params.THREAD_COUNT),
+            booleanParam(name: 'SKIP_CLEANUP', value: params.SKIP_CLEANUP),
+    ]
+}
+
+def triggerDesktopLinuxJob() {
+    build job: env.DESKTOP_LINUX_JOB, wait: true, propagate: true, parameters: [
+            string(name: 'BRANCH_NAME', value: params.BRANCH_NAME),
+            string(name: 'PROFILE', value: env.DESKTOP_LINUX_PROFILE),
+            string(name: 'MODE', value: params.MODE),
+            string(name: 'PLATFORM', value: 'linux'),
+            string(name: 'APP_VERSION', value: 'latest'),
+            string(name: 'THREAD_COUNT', value: params.DESKTOP_THREAD_COUNT),
+            booleanParam(name: 'SKIP_CLEANUP', value: params.SKIP_CLEANUP),
+    ]
+}
+
+def triggerDesktopMacJob() {
+    build job: env.DESKTOP_MAC_JOB, wait: true, propagate: true, parameters: [
+            string(name: 'BRANCH_NAME', value: params.BRANCH_NAME),
+            string(name: 'PROFILE', value: env.DESKTOP_MAC_PROFILE),
+            string(name: 'MODE', value: params.MODE),
+            string(name: 'PLATFORM', value: 'mac'),
+            string(name: 'APP_VERSION', value: 'latest'),
+            string(name: 'THREAD_COUNT', value: '1'),
+            booleanParam(name: 'SKIP_CLEANUP', value: params.SKIP_CLEANUP),
+    ]
+}
+
+def triggerMobileAndroidJob() {
+    build job: env.MOBILE_ANDROID_JOB, wait: true, propagate: true, parameters: [
+            string(name: 'BRANCH_NAME', value: params.BRANCH_NAME),
+            string(name: 'PROFILE', value: env.MOBILE_ANDROID_PROFILE),
+            string(name: 'MODE', value: params.MODE),
+            booleanParam(name: 'SKIP_CLEANUP', value: params.SKIP_CLEANUP),
+    ]
+}
+
+def triggerMobileIosJob() {
+    build job: env.MOBILE_IOS_JOB, wait: true, propagate: true, parameters: [
+            string(name: 'BRANCH_NAME', value: params.BRANCH_NAME),
+            string(name: 'PROFILE', value: env.MOBILE_IOS_PROFILE),
+            string(name: 'MODE', value: params.MODE),
+            booleanParam(name: 'SKIP_CLEANUP', value: params.SKIP_CLEANUP),
+    ]
+}

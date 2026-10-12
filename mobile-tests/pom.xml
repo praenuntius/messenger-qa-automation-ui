@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.foxtrot</groupId>
+        <artifactId>qa-automation-ui</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mobile-tests</artifactId>
+    <packaging>jar</packaging>
+
+    <properties>
+        <appium.url>http://127.0.0.1:4723</appium.url>
+        <platform.name></platform.name>
+        <device.name></device.name>
+        <platform.version></platform.version>
+        <app.path></app.path>
+        <android.apk.file.name>tango_preprod.apk</android.apk.file.name>
+        <android.app.package>com.tdm.messenger.preprod</android.app.package>
+        <encryption.key.ttl.minutes>1</encryption.key.ttl.minutes>
+        <encryption.test.user>TEST49</encryption.test.user>
+        <encryption.peer.user>TEST48</encryption.peer.user>
+        <!-- SKR network-fault: hold = client timeout 60s + 20s margin; retry wait > hold -->
+        <encryption.skr.abort.hold.ms>80000</encryption.skr.abort.hold.ms>
+        <encryption.skr.client.retry.wait.ms>100000</encryption.skr.client.retry.wait.ms>
+        <encryption.skr.logout.wait.sec>60</encryption.skr.logout.wait.sec>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.foxtrot</groupId>
+            <artifactId>qa-core</artifactId>
+        </dependency>
+
+        <!-- Mobile testing -->
+        <dependency>
+            <groupId>com.codeborne</groupId>
+            <artifactId>selenide-appium</artifactId>
+        </dependency>
+
+        <!-- Network MITM -->
+        <dependency>
+            <groupId>io.appium</groupId>
+            <artifactId>mitmproxy-java</artifactId>
+            <version>2.0.2</version>
+        </dependency>
+
+        <!-- Allure -->
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-junit5</artifactId>
+        </dependency>
+
+        <!-- JUnit -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-suite-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-suite-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-suite-commons</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Utils -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+
+                        <appium.url>${appium.url}</appium.url>
+                        <platform.name>${platform.name}</platform.name>
+                        <device.name>${device.name}</device.name>
+                        <platform.version>${platform.version}</platform.version>
+                        <app.path>${app.path}</app.path>
+                        <android.apk.file.name>${android.apk.file.name}</android.apk.file.name>
+                        <android.app.package>${android.app.package}</android.app.package>
+                        <!-- Без этого EncryptedApiService/CoreConfig падают на preprod из config.properties -->
+                        <baseApiUrl>${baseApiUrl}</baseApiUrl>
+                        <pusherBaseUrl>${pusherBaseUrl}</pusherBaseUrl>
+                        <encryption.test.user>${encryption.test.user}</encryption.test.user>
+                        <encryption.peer.user>${encryption.peer.user}</encryption.peer.user>
+                        <encryption.key.ttl.minutes>${encryption.key.ttl.minutes}</encryption.key.ttl.minutes>
+                        <encryption.skr.abort.hold.ms>${encryption.skr.abort.hold.ms}</encryption.skr.abort.hold.ms>
+                        <encryption.skr.client.retry.wait.ms>${encryption.skr.client.retry.wait.ms}</encryption.skr.client.retry.wait.ms>
+                        <encryption.skr.logout.wait.sec>${encryption.skr.logout.wait.sec}</encryption.skr.logout.wait.sec>
+
+                        <junit.jupiter.execution.parallel.enabled>false</junit.jupiter.execution.parallel.enabled>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-maven</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>3.2.0</version>
+                <configuration>
+                    <filesets>
+                        <fileset>
+                            <directory>build/reports/tests</directory>
+                            <includes>
+                                <include>**/*</include>
+                            </includes>
+                        </fileset>
+                    </filesets>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>stage14</id>
+            <properties>
+                <encryption.key.ttl.minutes>1</encryption.key.ttl.minutes>
+                <android.apk.file.name>foxtrot_dev.apk</android.apk.file.name>
+            </properties>
+        </profile>
+    </profiles>
+</project>

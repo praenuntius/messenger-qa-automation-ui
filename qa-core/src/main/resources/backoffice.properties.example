@@ -1,0 +1,15 @@
+# Скопируйте в backoffice.properties (файл в .gitignore) или задайте через -D / env.
+
+backofficeApiUrl=https://backoffice-preprod.domain.net
+
+# Суперадмин (автологин: auth/start → verifyOtp → JSESSIONID)
+backofficeSuperAdminPhone=9101234567
+backofficeSuperAdminOtp=111111
+
+# Опционально: свой JSESSIONID вместо автологина
+# backofficeSessionId=
+
+# Preprod: Autotest_org
+backofficeOrganizationId=128644
+# Stage14: Autotest_org (id=1007501) — см. environments/stage14-backoffice.properties
+backofficeWhitelistInitiator=qa-automation

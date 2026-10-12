@@ -1,0 +1,381 @@
+pipeline {
+    agent { label 'mac-mobile' }
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    parameters {
+        string(
+                name: 'BRANCH_NAME',
+                defaultValue: 'main',
+                description: 'Git branch to checkout'
+        )
+        choice(
+                name: 'PROFILE',
+                choices: ['mobile-android-ci', 'mobile-ios-ci'],
+                description: 'Профиль из config/run-profiles/ (см. docs/RUN_MATRIX.md)'
+        )
+        choice(
+                name: 'MODE',
+                choices: ['BASE', 'FULL'],
+                description: 'BASE: essential checks only | FULL: with diagnostics'
+        )
+        choice(
+                name: 'PLATFORM',
+                choices: ['ios', 'android'],
+                description: 'Mobile platform for test run'
+        )
+        booleanParam(
+                name: 'SKIP_CLEANUP',
+                defaultValue: false,
+                description: 'Skip cleanup for debugging'
+        )
+    }
+
+    environment {
+        ALLURE_ENDPOINT = "https://testops.domain.net"
+        ALLURE_PROJECT_ID = "8"
+        ALLURE_RESULTS = "mobile-tests/target/allure-results"
+        JAVA_HOME = "/Users/messengerqa/Library/Java/JavaVirtualMachines/ms-17.0.19/Contents/Home"
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
+        JAVA_TOOL_OPTIONS = '-Dfile.encoding=UTF-8'
+        MAVEN_OPTS = '-Xmx2g -Dfile.encoding=UTF-8'
+    }
+
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    echo "Mobile build #${env.BUILD_NUMBER} - Branch: ${params.BRANCH_NAME}, Profile: ${params.PROFILE}, Mode: ${params.MODE}"
+                    cleanWs()
+                    checkoutProject()
+                    loadCiConfig()
+                }
+            }
+        }
+
+        stage('Environment Check') {
+            when {
+                expression { params.MODE == 'FULL' }
+            }
+            steps {
+                script {
+                    checkEnvironment()
+                }
+            }
+        }
+
+        stage('Validate Platform') {
+            steps {
+                script {
+                    validatePlatform()
+                }
+            }
+        }
+
+        stage('Prepare Application') {
+            steps {
+                script {
+                    prepareApplication()
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    buildProject()
+                }
+            }
+        }
+
+        stage('Configure Allure') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'allure-api-key', variable: 'ALLURE_TOKEN')]) {
+                        configureAllure(env.ALLURE_TOKEN)
+                    }
+                }
+            }
+        }
+
+        stage('Run Mobile Tests') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'allure-api-key', variable: 'ALLURE_TOKEN')]) {
+                        runMobileTests(env.ALLURE_TOKEN)
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                if (!params.SKIP_CLEANUP) {
+                    cleanupMobileEnvironment()
+                }
+
+                archiveArtifacts artifacts: "logs/**/*.log, ${env.TEST_MODULE}/target/surefire-reports/**/*, ${env.ALLURE_RESULTS_DIR}/**/*",
+                        allowEmptyArchive: true
+
+                junit testResults: "${env.TEST_MODULE}/target/surefire-reports/*.xml",
+                        allowEmptyResults: true
+            }
+        }
+        failure {
+            script {
+                echo "Mobile pipeline failed. Check archived artifacts for details."
+            }
+        }
+    }
+}
+
+// ============= Helper Methods =============
+
+def loadCiConfig() {
+    def rp = load 'jenkins/runProfile.groovy'
+    def pipelinesCi = rp.loadPipelinesCi()
+    def allureCi = rp.loadAllureCi()
+
+    def profileId = resolveMobileProfile(pipelinesCi)
+    def ctx = rp.fromProfile(profileId)
+    def platform = rp.mobilePlatform(ctx.props)
+
+    env.TEST_MODULE = ctx.module
+    env.MAVEN_MODULE_ARGS = ctx.mavenModuleArgs
+    env.MAVEN_PROFILE_FLAGS = ctx.mavenFlags
+    env.MOBILE_PLATFORM = platform
+    env.ALLURE_RESULTS_DIR = "${ctx.module}/target/allure-results"
+    env.ALLURE_ENDPOINT = allureCi['allure.endpoint']
+
+    def allureKey = rp.mobileAllureProjectKey(profileId)
+    env.ALLURE_PROJECT_ID = rp.allureProjectId(allureCi, allureKey)
+
+    def launchTemplate = rp.allureLaunchTemplate(allureCi, allureKey)
+    env.ALLURE_LAUNCH_NAME = rp.resolveLaunchName(launchTemplate, [
+            'BRANCH_NAME': params.BRANCH_NAME,
+    ])
+
+    env.MOBILE_PROFILE = profileId
+
+    echo "Run profile: ${ctx.id} — ${ctx.description}"
+    echo "Module: ${ctx.module}, platform.name=${env.MOBILE_PLATFORM}"
+    echo "Maven flags: ${ctx.mavenFlags}"
+    echo "Allure project: ${allureKey} (#${env.ALLURE_PROJECT_ID}), launch: ${env.ALLURE_LAUNCH_NAME}"
+}
+
+/**
+ * Для job mobile-tests-android / mobile-tests-ios профиль берётся из pipelines.properties,
+ * даже если в UI выбран другой PROFILE.
+ */
+def resolveMobileProfile(Map pipelinesCi) {
+    def jobName = env.JOB_NAME?.toLowerCase() ?: ''
+    def androidJob = pipelinesCi['pipeline.mobile.android.jenkins.job']?.toLowerCase()
+    def iosJob = pipelinesCi['pipeline.mobile.ios.jenkins.job']?.toLowerCase()
+
+    if (androidJob && jobName.endsWith(androidJob)) {
+        return pipelinesCi['pipeline.mobile.android.profile']
+    }
+    if (iosJob && jobName.endsWith(iosJob)) {
+        return pipelinesCi['pipeline.mobile.ios.profile']
+    }
+    return params.PROFILE
+}
+
+def checkoutProject() {
+    checkout([
+            $class           : 'GitSCM',
+            branches         : [[name: "*/${params.BRANCH_NAME}"]],
+            userRemoteConfigs: scm.userRemoteConfigs,
+            extensions       : [
+                    [$class: 'CleanBeforeCheckout']
+            ]
+    ])
+}
+
+def checkEnvironment() {
+    sh '''
+        mkdir -p logs
+        {
+            echo "=== Mobile Environment Check ==="
+
+            echo "--- Node ---"
+            echo "NODE_NAME=${NODE_NAME}"
+            echo "WORKSPACE=${WORKSPACE}"
+            hostname
+            whoami
+
+            echo "--- PATH ---"
+            echo "$PATH"
+
+            echo "--- Which tools ---"
+            which java || true
+            which mvn || true
+            which allurectl || true
+            which node || true
+            which appium || true
+            which adb || true
+            which emulator || true
+            which xcrun || true
+            which xcodebuild || true
+
+            echo "--- Java ---"
+            java -version || true
+
+            echo "--- Maven ---"
+            mvn -version || true
+
+            echo "--- Allurectl ---"
+            allurectl --version || true
+
+            echo "--- Node.js ---"
+            node -v || true
+
+            echo "--- Appium ---"
+            appium -v || true
+
+            echo "--- Appium drivers ---"
+            appium driver list --installed || true
+
+            echo "--- Xcode ---"
+            xcodebuild -version || true
+
+            echo "--- iOS Simulators ---"
+            xcrun simctl list devices available | head -80 || true
+
+            echo "--- Android SDK / ADB ---"
+            echo "ANDROID_HOME=${ANDROID_HOME}"
+            echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
+            adb version || true
+
+            echo "--- Android Emulators ---"
+            emulator -list-avds || true
+        } > logs/environment.log 2>&1
+    '''
+}
+
+def validatePlatform() {
+    sh """
+        mkdir -p logs
+
+        PLATFORM="${env.MOBILE_PLATFORM}"
+
+        if [ "\$PLATFORM" != "ios" ] && [ "\$PLATFORM" != "android" ]; then
+            echo "ERROR: Invalid PLATFORM=\$PLATFORM. Expected: ios or android" > logs/platform-validation.log
+            exit 1
+        fi
+
+        echo "Selected platform: \$PLATFORM (profile: ${params.PROFILE})" > logs/platform-validation.log
+    """
+}
+
+def prepareApplication() {
+    sh """
+        mkdir -p logs
+        mkdir -p mobile-tests/src/test/resources/application
+
+        {
+            echo "=== Prepare application ==="
+            echo "PLATFORM=${env.MOBILE_PLATFORM}"
+            echo "PROFILE=${params.PROFILE}"
+            echo "WORKSPACE=${WORKSPACE}"
+            echo "MOBILE_APPS_DIR=${MOBILE_APPS_DIR}"
+
+            if [ -z "${MOBILE_APPS_DIR}" ]; then
+                echo "ERROR: MOBILE_APPS_DIR is not set"
+                exit 1
+            fi
+
+            if [ "${env.MOBILE_PLATFORM}" = "android" ]; then
+                cp "${MOBILE_APPS_DIR}/tango_preprod.apk" \
+                   "mobile-tests/src/test/resources/application/tango_preprod.apk"
+
+                ls -lh mobile-tests/src/test/resources/application/tango_preprod.apk
+            fi
+
+            if [ "${env.MOBILE_PLATFORM}" = "ios" ]; then
+                rm -rf mobile-tests/src/test/resources/application/Messenger.app
+
+                cp -R "${MOBILE_APPS_DIR}/Messenger.app" \
+                      "mobile-tests/src/test/resources/application/Messenger.app"
+
+                ls -lah mobile-tests/src/test/resources/application/Messenger.app
+            fi
+
+            echo "--- Application directory ---"
+            find mobile-tests/src/test/resources/application -maxdepth 2 -print
+        } > logs/application-prepare.log 2>&1
+    """
+}
+
+def buildProject() {
+    sh """
+        echo "JAVA_HOME=\$JAVA_HOME"
+        java -version
+        mvn -version
+
+        mvn ${env.MAVEN_MODULE_ARGS} clean compile test-compile -DskipTests -B -q
+    """
+}
+
+def configureAllure(token) {
+    sh """
+        mkdir -p ~/.allure logs
+
+cat > ~/.allure/config.yaml <<EOF
+project_id: ${ALLURE_PROJECT_ID}
+endpoint: ${ALLURE_ENDPOINT}
+token: ${token}
+EOF
+
+        if ! curl -sf ${ALLURE_ENDPOINT} > /dev/null; then
+            echo "WARNING: Cannot reach Allure TestOps" > logs/allure-config.log
+        else
+            echo "Allure configured successfully" > logs/allure-config.log
+        fi
+    """
+}
+
+def runMobileTests(token) {
+    def mvnCmd = "${env.MAVEN_MODULE_ARGS} test ${env.MAVEN_PROFILE_FLAGS} " +
+            "-Dallure.results.directory=${env.WORKSPACE}/${env.ALLURE_RESULTS_DIR} " +
+            '-Dsurefire.rerunFailingTestsCount=0 ' +
+            '-DexcludedGroups=encryption-suite ' +
+            '-B'
+
+    sh """
+        mkdir -p logs
+        rm -rf ${ALLURE_RESULTS_DIR}
+        mkdir -p ${ALLURE_RESULTS_DIR}
+
+        export ALLURE_TOKEN=${token}
+        export ALLURE_LAUNCH_NAME="${env.ALLURE_LAUNCH_NAME}"
+
+        allurectl watch \
+            --endpoint=${env.ALLURE_ENDPOINT} \
+            --results=${env.ALLURE_RESULTS_DIR} \
+            -- mvn ${mvnCmd} \
+            > logs/mobile-test-run.log 2>&1 || {
+                echo "=== mobile-test-run.log (tail) ==="
+                tail -n 120 logs/mobile-test-run.log
+                exit 1
+            }
+    """
+}
+
+def cleanupMobileEnvironment() {
+    sh '''
+        mkdir -p logs
+
+        {
+            echo "=== Mobile cleanup ==="
+            xcrun simctl shutdown all || true
+            adb emu kill || true
+        } > logs/mobile-cleanup.log 2>&1
+    '''
+}
